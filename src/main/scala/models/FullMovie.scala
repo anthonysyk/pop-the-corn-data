@@ -1,10 +1,10 @@
 package models
 
 case class MovieStats(
-                       color: String,
+                       color: Option[String],
                        contentRating: Option[String],
                        faceNumbersInPoster: Option[Int],
-                       aspectRatio: String,
+                       aspectRatio: Option[String],
                        castTotalFacebookLikes: Option[Int],
                        plotKeywords: Seq[String],
                        casting: Seq[Casting],
@@ -42,4 +42,4 @@ case class Rating(
                    numberOfCriticForReviews: Option[Int]
                  )
 
-case class Casting(role: Option[String], name: Option[String], facebookLikes: Int)
+case class Casting(role: Option[String], name: Option[String], facebookLikes: Option[Int])

@@ -17,7 +17,10 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-mllib" % sparkV,
   "org.elasticsearch" % "elasticsearch-spark-20_2.11" % "5.5.1",
   "com.chuusai" %% "shapeless" % "2.3.2",
-  "org.json4s" % "json4s-jackson_2.11" % "3.5.3"
+  "org.json4s" % "json4s-jackson_2.11" % "3.5.3",
+  "com.quantifind" %% "wisp" % "0.0.4",
+  "edu.stanford.nlp" % "stanford-corenlp" % "3.6.0",
+  "edu.stanford.nlp" % "stanford-corenlp" % "3.6.0" classifier "models"
 )
 
 lazy val circeVersion = "0.8.0"

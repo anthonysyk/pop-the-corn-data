@@ -1,8 +1,10 @@
+package nlp
+
 import breeze.numerics.log
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
-object TF_IDF {
+object TFIDF {
   def preprocessData(bagsOfWords: RDD[Array[String]], dictionnaryBroadcast: Broadcast[Array[String]]) = {
 
     val numberOfArticles = bagsOfWords.count

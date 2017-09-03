@@ -1,17 +1,15 @@
-import breeze.numerics.log
-import com.quantifind.charts.Highcharts._
+package nlp
+
 import edu.stanford.nlp.process.Morphology
 import models.FullMovie
 import org.apache.spark.SparkConf
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.mllib.clustering.{LDA, LDAModel}
-import org.apache.spark.mllib.linalg
+import org.apache.spark.ml.linalg.{Vector => MLVector}
+import org.apache.spark.mllib.clustering.{DistributedLDAModel, LDA, LDAModel}
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.json4s.jackson.Json
-
-import scala.collection.mutable
 
 case class Term(
                  id: String,
@@ -31,7 +29,7 @@ object LatentDirichletAllocation {
   Logger.getLogger("org").setLevel(Level.OFF)
   Logger.getLogger("akka").setLevel(Level.OFF)
 
-  val conf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("LatentDirichletAllocation")
+  val conf: SparkConf = new SparkConf().setMaster("local[2]").setAppName("LatentDirichletAllocation")
   implicit val ss: SparkSession = SparkSession.builder().config(conf).getOrCreate()
 
   lazy val index = "full_movie"
@@ -66,29 +64,27 @@ object LatentDirichletAllocation {
         NlpHelper.stem(word) -> 1})
       .reduceByKey(_ + _)
       .keys.collect()
-      .filterNot(VocabularyUtils.getStopwords.contains)
-      .filterNot(VocabularyUtils.getFirstNames.contains)
+      .filterNot(NLPHelper.getStopwords.contains)
+      .filterNot(NLPHelper.getFirstNames.contains)
     )
 
     // Création d'un vecteur de wordcount
     val vocab: Map[String, Int] = dictionnaryBroadcast.value.zipWithIndex.toMap
 
-    val documents: RDD[(Long, linalg.Vector)] = bagsOfWords.zipWithIndex().map {
+    val documents = bagsOfWords.zipWithIndex().map {
       case (tokens, id) =>
-        val _counter = new mutable.HashMap[Int, Double]()
-        tokens.foreach(term => if (vocab.contains(term)) {
-          val idx: Int = vocab(term)
-          _counter(idx) = _counter.getOrElse(idx, 0.0) + 1.0
-        })
-        id -> Vectors.sparse(vocab.size, _counter.toSeq)
+        val counter: Map[Int, Double] = tokens.filter(vocab.contains)
+          .map { term =>
+            vocab(term) -> 1.0
+          }.toMap
+        id -> Vectors.sparse(vocab.size, counter.toSeq)
     }
-
     val lda = new LDA().setK(8).setMaxIterations(100)
     val ldaModel: LDAModel = lda.run(documents)
 
     val ldaResult: Array[(Array[Int], Array[Double])] = ldaModel.describeTopics(maxTermsPerTopic = 10)
 
-    val test: Vector[TopicLDA] = ldaResult.zipWithIndex.map {
+    val test: Seq[TopicLDA] = ldaResult.zipWithIndex.map {
       case ((terms, termWeights), id) =>
         TopicLDA(
           id = (id + 1).toString,
@@ -97,15 +93,37 @@ object LatentDirichletAllocation {
               Term(termId.toString, dictionnaryBroadcast.value(termId), score)
           }
         )
-    }.toVector
+    }.toSeq
 
-    test.foreach(println)
 
+    // HighChart
+    import com.quantifind.charts.Highcharts._
     test.reverse.foreach { topic =>
       histogram(topic.terms.map(term => term.label -> term.score))
       legend(s"Topic ${topic.id}" +: Nil)
     }
 
+    // Doesn't work
+//    ldaModel.save(ss.sparkContext, "src/main/resources/lda-model")
+
+  }
+
+}
+
+object UseLDA {
+
+  import org.apache.log4j.{Level, Logger}
+
+  Logger.getLogger("org").setLevel(Level.OFF)
+  Logger.getLogger("akka").setLevel(Level.OFF)
+
+  val conf: SparkConf = new SparkConf().setMaster("local[*]").setAppName("LatentDirichletAllocation")
+  implicit val ss: SparkSession = SparkSession.builder().config(conf).getOrCreate()
+
+  def main(args: Array[String]): Unit = {
+    DistributedLDAModel.load(ss.sparkContext, "src/main/resources/lda-model")
+      .topicDistributions
+      .foreach(println)
   }
 
 }
